@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Music & Attention Experiment</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      background: #0f172a;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: #1e293b;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0px 0px 20px rgba(0,0,0,0.5);
+    }
+
+    input, select {
+      width: 90%;
+      padding: 10px;
+      margin: 8px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    button {
+      padding: 12px 20px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #22c55e;
+      color: black;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #16a34a;
+    }
+
+    #box {
+      width: 200px;
+      height: 200px;
+      margin: 40px auto;
+      display: none;
+      border-radius: 12px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container" id="formPage">
+  <h2>Music & Attention Experiment</h2>
+
+  <input id="name" placeholder="Full Name"><br>
+  <input id="age" type="number" placeholder="Age"><br>
+
+  <select id="gender">
+    <option value="">Select Gender</option>
+    <option>Male</option>
+    <option>Female</option>
+    <option>Other</option>
+  </select><br>
+
+  <button onclick="showInstructions()">Continue</button>
+</div>
+
+<div class="container hidden" id="instructionPage">
+  <h2>Instructions</h2>
+
+  <p>You will perform a reaction test under different music conditions.</p>
+
+  <p>👉 Wait for the screen.</p>
+  <p>👉 When you see a <b style="color:lime">GREEN BOX</b>, click it as fast as possible.</p>
+  <p>👉 Do NOT click before it appears.</p>
+  <p>👉 The test will be repeated 3 times with 3 different types of music and once without any music.</p>
+
+  <button onclick="startExperiment()">Start Experiment</button>
+</div>
+
+<div class="container hidden" id="experimentPage">
+  <h2 id="status"></h2>
+  <div id="box"></div>
+</div>
+
+<audio id="music" loop></audio>
+
+<script>
+
+// 🔥 YOUR GOOGLE SHEETS URL
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySCDOUufDTNYy2DOLx6iuGMP6mlpsPY7nRE1ulS93iHV4eH92QWwUTTJxGy3oSqA/exec";
+
+const musicFiles = {
+  none: "",
+  soft: "data/soft.mp3",
+  edm: "data/edm.mp3",
+  house: "data/house.mp3"
+};
+
+let order = [];
+let currentMusicIndex = 0;
+let trial = 1;
+let startTime;
+let user = {};
+
+function showInstructions() {
+  let name = document.getElementById("name").value;
+  let age = document.getElementById("age").value;
+  let gender = document.getElementById("gender").value;
+
+  if (!name || !age || !gender) {
+    alert("Please fill all details!");
+    return;
+  }
+
+  user = { name, age, gender };
+
+  document.getElementById("formPage").classList.add("hidden");
+  document.getElementById("instructionPage").classList.remove("hidden");
+}
+
+function shuffle(array) {
+  return array.sort(() => Math.random() - 0.5);
+}
+
+function startExperiment() {
+  document.getElementById("instructionPage").classList.add("hidden");
+  document.getElementById("experimentPage").classList.remove("hidden");
+
+  order = shuffle(["none", "soft", "edm", "house"]);
+  currentMusicIndex = 0;
+  trial = 1;
+
+  runCondition();
+}
+
+function runCondition() {
+  if (currentMusicIndex >= order.length) {
+    document.getElementById("status").innerText = "Experiment Completed!";
+    document.getElementById("music").pause();
+    return;
+  }
+
+  let musicType = order[currentMusicIndex];
+  let music = document.getElementById("music");
+
+  music.pause();
+  music.currentTime = 0;
+  music.src = musicFiles[musicType];
+
+  if (musicType !== "none") {
+    music.volume = 0.5;
+    music.play().catch(()=>{});
+  }
+
+  document.getElementById("status").innerText =
+    `Music: ${musicType.toUpperCase()} | Trial ${trial}`;
+
+  setTimeout(showBox, Math.random() * 2000 + 2000);
+}
+
+function showBox() {
+  let box = document.getElementById("box");
+  box.style.background = "lime";
+  box.style.display = "block";
+  startTime = new Date().getTime();
+}
+
+document.getElementById("box").onclick = function() {
+  let endTime = new Date().getTime();
+  let reactionTime = endTime - startTime;
+
+  this.style.display = "none";
+
+  let musicType = order[currentMusicIndex];
+
+  // 🔥 SEND DATA TO GOOGLE SHEETS
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      name: user.name,
+      age: user.age,
+      gender: user.gender,
+      music: musicType,
+      trial: trial,
+      time: reactionTime
+    })
+  });
+
+  trial++;
+
+  if (trial > 3) {
+    trial = 1;
+    currentMusicIndex++;
+  }
+
+  setTimeout(runCondition, 1000);
+};
+
+</script>
+
+</body>
+</html>
